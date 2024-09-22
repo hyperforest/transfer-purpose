@@ -1,0 +1,4 @@
+datasets/
+notebooks/dev/
+queries/data_acq/
+src/utils/__pycache__/*
