@@ -1,0 +1,9 @@
+[INFO] 2024-09-08 17:02:52.815753 - 2.96s - create_nodes_and_edges_table
+[INFO] 2024-09-08 17:02:59.185459 - 6.37s - create_sender_benef_pairs_table
+[INFO] 2024-09-08 17:03:02.132399 - 2.95s - resample_nodes_and_edges_table
+[INFO] 2024-09-08 17:03:04.781652 - 2.65s - reindex_tables
+[INFO] 2024-09-08 17:03:06.032517 - 1.25s - create_neighborhood_table
+[INFO] 2024-09-08 17:03:06.265630 - 0.03s - unit_test_disjoint_edges
+[INFO] 2024-09-08 17:03:07.750817 - 1.49s - get_general_statistics
+[INFO] 2024-09-08 17:03:08.028412 - 0.28s - get_nodes_statistics
+[INFO] 2024-09-08 17:03:08.125880 - 18.31s - main

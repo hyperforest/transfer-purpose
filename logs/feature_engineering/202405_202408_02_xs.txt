@@ -1,0 +1,5 @@
+[INFO] 2024-09-08 17:06:12.714107 - 0.03s - create_remark_features
+[INFO] 2024-09-08 17:06:12.746553 - 0.03s - create_node_trx_features
+[INFO] 2024-09-08 17:06:12.761071 - 0.01s - create_days_features
+[INFO] 2024-09-08 17:06:12.768313 - 0.01s - get_features_statistics
+[INFO] 2024-09-08 17:06:12.792606 - 0.15s - main

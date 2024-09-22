@@ -1,0 +1,11 @@
+[INFO] 2024-09-08 17:02:06.704944 - 2.55s - create_nodes_and_edges_table
+[INFO] 2024-09-08 17:02:13.248544 - 6.54s - create_sender_benef_pairs_table
+[INFO] 2024-09-08 17:02:13.443033 - 0.19s - resample_nodes_and_edges_table
+[INFO] 2024-09-08 17:02:13.448245 - 0.01s - reindex_tables
+[INFO] 2024-09-08 17:02:13.448245 - 0.00s - create_neighborhood_table
+[INFO] 2024-09-08 17:02:13.479902 - 0.03s - create_connected_components
+[INFO] 2024-09-08 17:02:13.479902 - 0.00s - unit_test_disjoint_edges
+[INFO] 2024-09-08 17:02:13.495738 - 0.02s - get_general_statistics
+[INFO] 2024-09-08 17:02:13.527065 - 0.03s - get_nodes_statistics
+[INFO] 2024-09-08 17:02:13.543080 - 0.02s - get_connected_component_statistics
+[INFO] 2024-09-08 17:02:13.558819 - 9.43s - main
