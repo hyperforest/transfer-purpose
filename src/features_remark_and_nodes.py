@@ -1,10 +1,14 @@
 import argparse
 import duckdb
 import sys
+import warnings
 
 sys.path.append("./utils/")
 
 from utils.time_utils import timeit  # type: ignore
+from utils.db import load_db  # type: ignore
+
+warnings.filterwarnings("ignore")
 
 
 @timeit
@@ -66,8 +70,7 @@ def main():
     parser.add_argument("--db_path", type=str, required=True)
     args = parser.parse_args()
 
-    conn = duckdb.connect(args.db_path)
-
+    conn = load_db(args.db_path)
     create_remark_features(conn, dest_table="remark_features")
     create_node_trx_features(conn, dest_table="node_trx_features")
     create_days_features(conn, dest_table="days_features")
