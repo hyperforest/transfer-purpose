@@ -1,4 +1,5 @@
 import argparse
+import duckdb
 import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
@@ -141,7 +142,14 @@ def main():
     day_features.index.name = "calendar_date"
     day_features = day_features.reset_index()
     day_features["calendar_date"] = day_features["calendar_date"].dt.date
-    day_features.to_parquet(args.features_save_dir)
+    
+    duckdb.sql(
+        f'''
+        COPY(SELECT * FROM day_features)
+        TO '{args.features_save_dir}'
+        (FORMAT PARQUET)
+        '''
+    )
 
 
 if __name__ == "__main__":
