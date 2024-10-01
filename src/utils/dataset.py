@@ -86,12 +86,10 @@ class CustomDataset(Dataset):
             """
         ).df()
 
-        labels_map = dict(zip(self.labels, range(len(LABELS))))
-        tensor = torch.zeros(
-            (len(labels.purpose.map(labels_map).values), len(self.labels)),
-            dtype=torch.float32
-        )
-        tensor[torch.arange(len(labels)), labels.purpose.map(labels_map).values] = 1
+        labels_map = dict(zip(self.labels, range(len(self.labels))))
+        mapped = labels.purpose.map(labels_map).values
+        tensor = torch.zeros((len(mapped), len(self.labels)), dtype=torch.float32)
+        tensor[torch.arange(len(labels)), mapped] = 1
 
         return tensor
 
