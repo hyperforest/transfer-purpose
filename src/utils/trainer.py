@@ -55,6 +55,13 @@ class Trainer:
         return metrics, preds, outputs
 
     def fit(self, train_loader, valid_loader, epochs, verbose=0):
+        history = {
+            'loss': [],
+            'f1': [],
+            'val_loss': [],
+            'val_f1': []
+        }
+
         for epoch in range(epochs):
             time_st = time()
 
@@ -79,6 +86,11 @@ class Trainer:
                 metrics_prefix="val_",
             )
 
+            history['loss'].append(train_metrics['loss'])
+            history['f1'].append(train_metrics['f1'])
+            history['val_loss'].append(val_metrics['val_loss'])
+            history['val_f1'].append(val_metrics['val_f1'])
+
             time_en = time()
             runtime = time_en - time_st
 
@@ -89,6 +101,8 @@ class Trainer:
 
             if verbose == 2:
                 print()
+
+        return history
 
     def train(self, train_loader, verbose=True, text_prefix=None):
         text_prefix = text_prefix or ""
@@ -121,7 +135,7 @@ class Trainer:
         outputs = torch.cat(outputs)
         # print(targets.shape, predictions.shape)
 
-        loss = self.criterion(outputs, targets).float()
+        loss = self.criterion(outputs, targets).item()
         f1 = f1_score(targets, predictions, average="macro")
 
         metrics = {
@@ -162,7 +176,7 @@ class Trainer:
         predictions = torch.cat(predictions)
         outputs = torch.cat(outputs)
         
-        loss = self.criterion(outputs, targets).float()
+        loss = self.criterion(outputs, targets).item()
         f1 = f1_score(targets, predictions, average="macro")
         
         metrics = {
