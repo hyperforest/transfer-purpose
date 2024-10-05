@@ -92,6 +92,14 @@ def get_nodes_statistics(conn: duckdb.DuckDBPyConnection) -> None:
 
 
 @timeit
+def get_labels_statistics(conn: duckdb.DuckDBPyConnection) -> None:
+    with open("./queries/statistics/labels_statistics.sql") as f:
+        query = f.read()
+
+    conn.execute(query)
+
+
+@timeit
 def get_connected_component_statistics(conn: duckdb.DuckDBPyConnection) -> None:
     with open("./queries/statistics/connected_components_statistics.sql") as f:
         query = f.read()
@@ -166,6 +174,7 @@ def main():
 
     get_general_statistics(conn)
     get_nodes_statistics(conn)
+    get_labels_statistics(conn)
 
     if is_feasible_to_create_cc:
         get_connected_component_statistics(conn)
