@@ -1,6 +1,7 @@
 import torch
 from tqdm import tqdm
 from sklearn.metrics import f1_score
+from time import time
 
 
 class Trainer:
@@ -33,7 +34,7 @@ class Trainer:
             "f1": f1,
         }
 
-        return metrics, preds
+        return metrics, preds, outputs
 
     def test_step(self, inputs, labels):
         self.model.eval()
@@ -51,10 +52,12 @@ class Trainer:
         }
         # print(preds)
 
-        return metrics, preds
+        return metrics, preds, outputs
 
     def fit(self, train_loader, valid_loader, epochs, verbose=0):
         for epoch in range(epochs):
+            time_st = time()
+
             text_prefix = f"[Train] [Epoch {epoch + 1}/{epochs}] "
             _ = self.train(
                 train_loader, verbose=(verbose == 2), text_prefix=text_prefix
@@ -63,7 +66,7 @@ class Trainer:
             text_prefix = f"[Eval ] [Epoch {epoch + 1}/{epochs}] "
             train_metrics, train_preds = self.eval(
                 train_loader,
-                verbose=(verbose >= 1),
+                verbose=(verbose >= 2),
                 text_prefix=text_prefix,
                 metrics_prefix="",
             )
@@ -71,25 +74,27 @@ class Trainer:
             text_prefix = f"[Eval ] [Epoch {epoch + 1}/{epochs}] "
             val_metrics, val_preds = self.eval(
                 valid_loader,
-                verbose=(verbose >= 1),
+                verbose=(verbose >= 2),
                 text_prefix=text_prefix,
                 metrics_prefix="val_",
             )
 
+            time_en = time()
+            runtime = time_en - time_st
+
             if verbose >= 1:
                 metrics = {**train_metrics, **val_metrics}
                 text = " - ".join([f"{k}: {v:.4f}" for k, v in metrics.items()])
-                print(f"[Epoch {epoch + 1}/{epochs}] {text}")
+                print(f"[Epoch {epoch + 1}/{epochs}] {runtime:.1f}s - {text}")
 
-            if verbose > 0:
+            if verbose == 2:
                 print()
 
     def train(self, train_loader, verbose=True, text_prefix=None):
         text_prefix = text_prefix or ""
         pbar = train_loader
 
-        running_loss = 0.0
-        targets, predictions = [], []
+        targets, predictions, outputs = [], [], []
 
         self.model.train()
 
@@ -98,12 +103,12 @@ class Trainer:
 
         for data in pbar:
             inputs, labels = data
-            metrics, preds = self.train_step(inputs, labels)
-            running_loss += metrics["loss"]
+            metrics, preds, output = self.train_step(inputs, labels)
 
             labels = torch.reshape(labels, (-1, self.model.num_classes))
             targets.append(torch.argmax(labels, dim=1))
             predictions.append(preds)
+            outputs.append(output)
 
             if verbose:
                 text = f"{text_prefix}" + " ".join(
@@ -113,9 +118,10 @@ class Trainer:
 
         targets = torch.cat(targets)
         predictions = torch.cat(predictions)
+        outputs = torch.cat(outputs)
         # print(targets.shape, predictions.shape)
 
-        loss = running_loss / len(train_loader)
+        loss = self.criterion(outputs, targets).float()
         f1 = f1_score(targets, predictions, average="macro")
 
         metrics = {
@@ -128,8 +134,7 @@ class Trainer:
         text_prefix = text_prefix or ""
         metrics_prefix = metrics_prefix or ""
 
-        running_loss = 0.0
-        targets, predictions = [], []
+        targets, predictions, outputs = [], [], []
 
         self.model.eval()
 
@@ -140,12 +145,12 @@ class Trainer:
         with torch.no_grad():
             for data in pbar:
                 inputs, labels = data
-                metrics, preds = self.test_step(inputs, labels)
-                running_loss += metrics["loss"]
+                metrics, preds, output = self.test_step(inputs, labels)
 
                 labels = torch.reshape(labels, (-1, self.model.num_classes))
                 targets.append(torch.argmax(labels, dim=1))
                 predictions.append(preds)
+                outputs.append(output)
 
                 if verbose:
                     text = f"{text_prefix}" + " ".join(
@@ -155,8 +160,9 @@ class Trainer:
 
         targets = torch.cat(targets)
         predictions = torch.cat(predictions)
+        outputs = torch.cat(outputs)
         
-        loss = running_loss / len(test_loader)
+        loss = self.criterion(outputs, targets).float()
         f1 = f1_score(targets, predictions, average="macro")
         
         metrics = {
