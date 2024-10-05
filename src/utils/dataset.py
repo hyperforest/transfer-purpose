@@ -17,10 +17,11 @@ LABELS = [
 
 
 class CustomDataset(Dataset):
-    def __init__(self, duckdb_conn, batch_size, data_split, labels=None):
+    def __init__(self, duckdb_conn, batch_size, data_split, labels=None, seed=42):
         self.conn = duckdb_conn
         self.batch_size = batch_size
         self.data_split = data_split
+        self.seed = seed
 
         self._generate_batches()
         self.num_batches = self._get_num_batches()
@@ -34,24 +35,51 @@ class CustomDataset(Dataset):
             """
             CREATE OR REPLACE TEMPORARY TABLE batches AS
 
-            WITH batched AS (
+            WITH row_numbered AS (
                 SELECT
-                    trx_id
-                    , data_split
-                    , ROW_NUMBER() OVER (
-                        PARTITION BY data_split ORDER BY trx_id
-                    ) - 1 AS row_num,
+                    data_split
+                    , purpose
+                    , trx_id
+                    , ROW_NUMBER() OVER(
+                        PARTITION BY data_split, purpose ORDER BY HASH(trx_id + $seed)
+                    ) AS row_num1
                 FROM
                     edges
             )
 
+            , batched AS (
+                SELECT
+                    data_split
+                    , purpose
+                    , trx_id
+                    , row_num1
+                    , ROW_NUMBER() OVER(
+                        PARTITION BY data_split ORDER BY row_num1, purpose, trx_id
+                    ) AS row_num2
+                FROM
+                    row_numbered
+            )
+
+            , final AS (
+                SELECT
+                    *
+                    , FLOOR(row_num2 / $batch_size)::INT AS batch_id
+                FROM
+                    batched
+                -- ORDER BY data_split, row_num1, purpose, trx_id
+            )
+
             SELECT
-                *
-                , FLOOR(row_num / $batch_size)::INT AS batch_id
+                batch_id
+                , data_split
+                , trx_id
             FROM
-                batched
+                final
             """,
-            {"batch_size": self.batch_size},
+            {
+                "batch_size": self.batch_size,
+                "seed": self.seed,
+            },
         )
 
     def _get_num_batches(self):
