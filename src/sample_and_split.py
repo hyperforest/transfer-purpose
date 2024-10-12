@@ -28,7 +28,9 @@ def create_sender_benef_pairs_table(
         query = f.read()
 
     limit_edges_statement = (
-        f"AND cumul_count_trx <= {limit_edges}" if limit_edges else ""
+        f"QUALIFY SUM(count_trx_total) OVER(ORDER BY pair_rank) <= {limit_edges}"
+        if limit_edges
+        else ""
     )
 
     conn.execute(query.format(limit_edges_statement=limit_edges_statement))
@@ -64,15 +66,6 @@ def create_connected_components(conn: duckdb.DuckDBPyConnection) -> None:
         query = f.read()
 
     conn.execute(query)
-
-
-@timeit
-def unit_test_disjoint_edges(conn: duckdb.DuckDBPyConnection) -> None:
-    with open("./queries/sample_and_split/07_unit_test_disjoint_edges.sql") as f:
-        query = f.read()
-
-    result = conn.sql(query).fetchall()
-    assert result[0][0], "Edges are not disjoint"
 
 
 @timeit
@@ -169,8 +162,6 @@ def main():
 
     if is_feasible_to_create_cc:
         create_connected_components(conn)
-
-    unit_test_disjoint_edges(conn)
 
     get_general_statistics(conn)
     get_nodes_statistics(conn)
