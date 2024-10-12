@@ -17,62 +17,96 @@ LABELS = [
 
 
 class CustomDataset(Dataset):
-    def __init__(self, duckdb_conn, batch_size, data_split, labels=None, seed=42):
+    def __init__(
+        self,
+        duckdb_conn,
+        batch_size,
+        data_split,
+        tokenizer,
+        text_encoder,
+        labels=None,
+        seed=42,
+    ):
         self.conn = duckdb_conn
         self.batch_size = batch_size
         self.data_split = data_split
+        self.tokenizer = tokenizer
+        self.text_encoder = text_encoder
+        self.labels = labels or LABELS
+        self.labels_map = dict(zip(self.labels, range(len(self.labels))))
         self.seed = seed
 
         self._generate_batches()
         self.num_batches = self._get_num_batches()
-        self.labels = labels or LABELS
 
     def __len__(self):
         return self.num_batches
+
+    def _generate_labels(self):
+        self.labels = (
+            self.conn.sql("SELECT DISTINCT purpose FROM edges ORDER BY 1")
+            .df()
+            .purpose.tolist()
+        )
 
     def _generate_batches(self):
         self.conn.execute(
             """
             CREATE OR REPLACE TEMPORARY TABLE batches AS
 
-            WITH row_numbered AS (
+            -- Calculate the proportion of each purpose within the training set
+            WITH purpose_proportions AS (
                 SELECT
-                    data_split
-                    , purpose
-                    , trx_id
-                    , ROW_NUMBER() OVER(
-                        PARTITION BY data_split, purpose ORDER BY HASH(trx_id + $seed)
-                    ) AS row_num1
+                    purpose,
+                    pct_train AS proportion
                 FROM
-                    edges
-            )
+                    statistics_labels
+            ),
 
-            , batched AS (
+            -- Number each row with respect to the purpose and data_split while ordering by hash to maintain randomness
+            row_numbered AS (
                 SELECT
-                    data_split
-                    , purpose
-                    , trx_id
-                    , row_num1
-                    , ROW_NUMBER() OVER(
-                        PARTITION BY data_split ORDER BY row_num1, purpose, trx_id
+                    e.data_split,
+                    e.purpose,
+                    e.trx_id,
+                    ROW_NUMBER() OVER(
+                        PARTITION BY e.data_split, e.purpose ORDER BY HASH(e.trx_id + $seed)
+                    ) AS row_num1,
+                    pp.proportion
+                FROM
+                    edges e
+                    JOIN purpose_proportions pp ON e.purpose = pp.purpose
+            ),
+
+            -- Determine the batch size per purpose for each row
+            batched AS (
+                SELECT
+                    data_split,
+                    purpose,
+                    trx_id,
+                    row_num1,
+                    proportion,
+                    ROW_NUMBER() OVER(
+                        PARTITION BY data_split ORDER BY row_num1 / proportion, purpose, trx_id
                     ) AS row_num2
                 FROM
                     row_numbered
-            )
+            ),
 
-            , final AS (
+            -- Assign batch IDs based on the row numbers and batch size
+            final AS (
                 SELECT
-                    *
-                    , FLOOR(row_num2 / $batch_size)::INT AS batch_id
+                    *,
+                    FLOOR(row_num2 / $batch_size)::INT AS batch_id
                 FROM
                     batched
-                -- ORDER BY data_split, row_num1, purpose, trx_id
             )
 
             SELECT
-                batch_id
-                , data_split
-                , trx_id
+                batch_id,
+                data_split,
+                trx_id,
+                purpose
             FROM
                 final
             """,
@@ -87,11 +121,11 @@ class CustomDataset(Dataset):
             f"""
             SELECT MAX(batch_id) + 1 FROM batches WHERE data_split = '{self.data_split}'
             """
-        ).fetchone()[0]
+        ).fetchone()[0] or 0
 
     @lru_cache(maxsize=2048)
     def _get_labels(self, idx):
-        labels = self.conn.execute(
+        df_labels = self.conn.execute(
             f"""
             WITH batch AS (
                 SELECT
@@ -114,16 +148,15 @@ class CustomDataset(Dataset):
             """
         ).df()
 
-        labels_map = dict(zip(self.labels, range(len(self.labels))))
-        mapped = labels.purpose.map(labels_map).values
+        mapped = df_labels.purpose.map(self.labels_map).values
         tensor = torch.zeros((len(mapped), len(self.labels)), dtype=torch.float32)
-        tensor[torch.arange(len(labels)), mapped] = 1
+        tensor[torch.arange(len(df_labels)), mapped] = 1
 
         return tensor
 
     @lru_cache(maxsize=2048)
     def _get_features(self, idx):
-        tensor = self.conn.execute(
+        df_features = self.conn.execute(
             f"""
             WITH batch AS (
                 SELECT
@@ -133,15 +166,6 @@ class CustomDataset(Dataset):
                 WHERE 1 = 1
                     AND data_split = '{self.data_split}'
                     AND batch_id = {idx}
-            )
-
-            , stats_remark_features AS (
-                SELECT
-                    * EXCLUDE(feature_type)
-                FROM
-                    statistics_features
-                WHERE 1 = 1
-                    AND feature_type = 'remark'
             )
 
             , features AS (
@@ -155,32 +179,6 @@ class CustomDataset(Dataset):
                     , amount_encoding(e.amount, 5_000_000, 10_000_000)   AS encoded_amount_5M_10M
                     , amount_encoding(e.amount, 10_000_000, 50_000_000)  AS encoded_amount_10M_50M
                     , amount_encoding(e.amount, 10_000, 50_000_000)      AS encoded_amount_10K_50M
-                    , IF(count_trx IS NULL,            0, count_trx / max_count_trx)                       AS count_trx
-                    , IF(count_trx_not_others IS NULL, 0, count_trx_not_others / max_count_trx_not_others) AS count_trx_not_others
-                    , IF(count_trx_bills IS NULL,      0, count_trx_bills / max_count_trx_bills)           AS count_trx_bills
-                    , IF(count_trx_business IS NULL,   0, count_trx_business / max_count_trx_business)     AS count_trx_business
-                    , IF(count_trx_debt IS NULL,       0, count_trx_debt / max_count_trx_debt)             AS count_trx_debt
-                    , IF(count_trx_donation IS NULL,   0, count_trx_donation / max_count_trx_donation)     AS count_trx_donation
-                    , IF(count_trx_family IS NULL,     0, count_trx_family / max_count_trx_family)         AS count_trx_family
-                    , IF(count_trx_invest IS NULL,     0, count_trx_invest / max_count_trx_invest)         AS count_trx_invest
-                    , IF(count_trx_shopping IS NULL,   0, count_trx_shopping / max_count_trx_shopping)     AS count_trx_shopping
-                    , IF(count_trx_others IS NULL,     0, count_trx_others / max_count_trx_others)         AS count_trx_others
-                    , IFNULL(rf.ratio_trx_bills, 0)                AS ratio_trx_bills
-                    , IFNULL(rf.ratio_trx_business, 0)             AS ratio_trx_business
-                    , IFNULL(rf.ratio_trx_debt, 0)                 AS ratio_trx_debt
-                    , IFNULL(rf.ratio_trx_donation, 0)             AS ratio_trx_donation
-                    , IFNULL(rf.ratio_trx_family, 0)               AS ratio_trx_family
-                    , IFNULL(rf.ratio_trx_invest, 0)               AS ratio_trx_invest
-                    , IFNULL(rf.ratio_trx_shopping, 0)             AS ratio_trx_shopping
-                    , IFNULL(rf.ratio_trx_others, 0)               AS ratio_trx_others
-                    , IFNULL(rf.ratio_trx_not_others, 0)           AS ratio_trx_not_others
-                    , IFNULL(rf.ratio_trx_bills_non_others, 0)     AS ratio_trx_bills_non_others
-                    , IFNULL(rf.ratio_trx_business_non_others, 0)  AS ratio_trx_business_non_others
-                    , IFNULL(rf.ratio_trx_debt_non_others, 0)      AS ratio_trx_debt_non_others
-                    , IFNULL(rf.ratio_trx_donation_non_others, 0)  AS ratio_trx_donation_non_others
-                    , IFNULL(rf.ratio_trx_family_non_others, 0)    AS ratio_trx_family_non_others
-                    , IFNULL(rf.ratio_trx_invest_non_others, 0)    AS ratio_trx_invest_non_others
-                    , IFNULL(rf.ratio_trx_shopping_non_others, 0)  AS ratio_trx_shopping_non_others
                 FROM
                     batch AS b
                 LEFT JOIN
@@ -188,11 +186,6 @@ class CustomDataset(Dataset):
                 LEFT JOIN
                     days_features AS df
                     ON e.trx_date = df.calendar_date
-                LEFT JOIN
-                    remark_features AS rf
-                    ON e.remark = rf.remark
-                CROSS JOIN
-                    stats_remark_features AS srf
             )
 
             SELECT
@@ -204,8 +197,59 @@ class CustomDataset(Dataset):
             """
         ).df()
 
-        tensor = torch.tensor(tensor.values, dtype=torch.float32)
-        return tensor
+        df_emb = self.conn.execute(
+            f"""
+            WITH batch AS (
+                SELECT
+                    trx_id
+                FROM
+                    batches
+                WHERE 1 = 1
+                    AND data_split = '{self.data_split}'
+                    AND batch_id = {idx}
+            )
+
+            SELECT
+                batch.trx_id
+                , s.node_name AS sender_node_name
+                , b.node_name AS benef_node_name
+                , e.remark
+            FROM
+                batch
+            LEFT JOIN
+                edges AS e USING(trx_id)
+            LEFT JOIN
+                nodes AS s ON e.sender_node_id = s.id
+            LEFT JOIN
+                nodes AS b ON e.benef_node_id = b.id
+            ORDER BY
+                trx_id
+            """
+        ).df()
+
+        all_embeddings = []
+
+        for col in ["benef_node_name"]:
+            with torch.no_grad():
+                embeddings = self.text_encoder(
+                    **self.tokenizer(
+                        df_emb[col].tolist(),
+                        padding=True,
+                        truncation=True,
+                        max_length=32,
+                        return_tensors="pt",
+                    )
+                ).last_hidden_state[:, 0, :]
+
+            all_embeddings.append(embeddings)
+
+        all_embeddings = torch.cat(all_embeddings, dim=1)
+        features = torch.cat(
+            [torch.tensor(df_features.values, dtype=torch.float32), all_embeddings],
+            dim=1,
+        )
+
+        return features
 
     @lru_cache(maxsize=2048)
     def __getitem__(self, idx):
