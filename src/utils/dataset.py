@@ -229,7 +229,7 @@ class CustomDataset(Dataset):
 
         all_embeddings = []
 
-        for col in ["benef_node_name"]:
+        for col in ["sender_node_name", "benef_node_name", "remark"]:
             with torch.no_grad():
                 embeddings = self.text_encoder(
                     **self.tokenizer(
