@@ -28,10 +28,10 @@ class Trainer:
         self.optimizer.step()
 
         preds = torch.argmax(outputs, dim=1)
-        f1 = f1_score(torch.argmax(labels, dim=1), preds, average="macro")
+        # f1 = f1_score(torch.argmax(labels, dim=1), preds, average="macro")
         metrics = {
             "loss": loss.item(),
-            "f1": f1,
+            # "f1": f1,
         }
 
         return metrics, preds, outputs
@@ -45,10 +45,10 @@ class Trainer:
         loss = self.criterion(outputs, labels)
 
         preds = torch.argmax(outputs, dim=1)
-        f1 = f1_score(torch.argmax(labels, dim=1), preds, average="macro")
+        # f1 = f1_score(torch.argmax(labels, dim=1), preds, average="macro")
         metrics = {
             "loss": loss.item(),
-            "f1": f1,
+            # "f1": f1,
         }
         # print(preds)
 
@@ -108,41 +108,22 @@ class Trainer:
         text_prefix = text_prefix or ""
         pbar = train_loader
 
-        targets, predictions, outputs = [], [], []
-
         self.model.train()
 
         if verbose:
             pbar = tqdm(train_loader)
 
-        for data in pbar:
+        running_loss = 0.0
+        for i, data in enumerate(pbar):
             inputs, labels = data
             metrics, preds, output = self.train_step(inputs, labels)
 
             labels = torch.reshape(labels, (-1, self.model.num_classes))
-            targets.append(torch.argmax(labels, dim=1))
-            predictions.append(preds)
-            outputs.append(output)
+            running_loss += metrics["loss"]
 
             if verbose:
-                text = f"{text_prefix}" + " ".join(
-                    [f"{k}: {v:.4f}" for k, v in metrics.items()]
-                )
+                text = f"{text_prefix}loss: {running_loss / (i + 1):.4f}"
                 pbar.set_description_str(text)
-
-        targets = torch.cat(targets)
-        predictions = torch.cat(predictions)
-        outputs = torch.cat(outputs)
-        # print(targets.shape, predictions.shape)
-
-        loss = self.criterion(outputs, targets).item()
-        f1 = f1_score(targets, predictions, average="macro")
-
-        metrics = {
-            "loss": loss,
-            "f1": f1,
-        }
-        return metrics, predictions
 
     def eval(self, test_loader, verbose=True, text_prefix=None, metrics_prefix=None):
         text_prefix = text_prefix or ""
