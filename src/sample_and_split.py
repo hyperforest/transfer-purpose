@@ -28,7 +28,7 @@ def create_sender_benef_pairs_table(
         query = f.read()
 
     limit_edges_statement = (
-        f"QUALIFY SUM(count_trx_total) OVER(ORDER BY pair_rank) <= {limit_edges}"
+        f"ORDER BY pair_rank LIMIT {limit_edges}"
         if limit_edges
         else ""
     )
