@@ -9,7 +9,7 @@ python ./src/sample_and_split.py \
     --date_valid_end 2024-06-30 \
     --date_test_start 2024-07-01 \
     --date_test_end 2024-07-31 \
-    --limit_edges 1000
+    --limit_edges 100
 
 echo "Sample and split 202405_202408_01_xxs done"
 
@@ -24,7 +24,7 @@ python ./src/sample_and_split.py \
     --date_valid_end 2024-06-30 \
     --date_test_start 2024-07-01 \
     --date_test_end 2024-07-31 \
-    --limit_edges 2000
+    --limit_edges 1000
 
 echo "Sample and split 202405_202408_02_xs done"
 
@@ -54,7 +54,7 @@ python ./src/sample_and_split.py \
     --date_valid_end 2024-06-30 \
     --date_test_start 2024-07-01 \
     --date_test_end 2024-07-31 \
-    --limit_edges 30000
+    --limit_edges 50000
 
 echo "Sample and split 202405_202408_04_m done"
 
@@ -69,7 +69,7 @@ python ./src/sample_and_split.py \
     --date_valid_end 2024-06-30 \
     --date_test_start 2024-07-01 \
     --date_test_end 2024-07-31 \
-    --limit_edges 300000
+    --limit_edges 100000
 
 echo "Sample and split 202405_202408_05_l done"
 
