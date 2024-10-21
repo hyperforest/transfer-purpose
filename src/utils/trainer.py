@@ -17,7 +17,6 @@ class Trainer:
         return inputs, labels
 
     def train_step(self, inputs, labels):
-        self.model.train()
         inputs, labels = inputs.to(self.device), labels.to(self.device)
         inputs, labels = self.preprocess(inputs, labels)
 
@@ -37,7 +36,6 @@ class Trainer:
         return metrics, preds, outputs
 
     def test_step(self, inputs, labels):
-        self.model.eval()
         inputs, labels = inputs.to(self.device), labels.to(self.device)
         inputs, labels = self.preprocess(inputs, labels)
 
@@ -54,13 +52,17 @@ class Trainer:
 
         return metrics, preds, outputs
 
-    def fit(self, train_loader, valid_loader, epochs, verbose=0):
-        history = {
-            'loss': [],
-            'f1': [],
-            'val_loss': [],
-            'val_f1': []
-        }
+    def fit(
+        self,
+        train_loader,
+        valid_loader,
+        epochs,
+        verbose=0,
+        reduce_lr=False,
+        reduce_lr_factor=0.9,
+        reduce_lr_patience=10,
+    ):
+        history = {"loss": [], "f1": [], "val_loss": [], "val_f1": []}
 
         for epoch in range(epochs):
             time_st = time()
@@ -86,10 +88,10 @@ class Trainer:
                 metrics_prefix="val_",
             )
 
-            history['loss'].append(train_metrics['loss'])
-            history['f1'].append(train_metrics['f1'])
-            history['val_loss'].append(val_metrics['val_loss'])
-            history['val_f1'].append(val_metrics['val_f1'])
+            history["loss"].append(train_metrics["loss"])
+            history["f1"].append(train_metrics["f1"])
+            history["val_loss"].append(val_metrics["val_loss"])
+            history["val_f1"].append(val_metrics["val_f1"])
 
             time_en = time()
             runtime = time_en - time_st
@@ -101,6 +103,11 @@ class Trainer:
 
             if verbose == 2:
                 print()
+
+            # update optimizer LR
+            if epoch > 0 and epoch % reduce_lr_patience == 0:
+                for param_group in self.optimizer.param_groups:
+                    param_group["lr"] = param_group["lr"] * reduce_lr_factor
 
         return history
 
@@ -156,10 +163,10 @@ class Trainer:
         targets = torch.cat(targets)
         predictions = torch.cat(predictions)
         outputs = torch.cat(outputs)
-        
+
         loss = self.criterion(outputs, targets).item()
         f1 = f1_score(targets, predictions, average="macro")
-        
+
         metrics = {
             f"{metrics_prefix}loss": loss,
             f"{metrics_prefix}f1": f1,
